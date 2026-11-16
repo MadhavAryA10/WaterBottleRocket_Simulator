@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Water Rocket Flight Simulator 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* layout: full-screen 3D world; launch menu docked left, optimum panel docked right, flight HUD top-centre */
+  --panel: rgba(12, 22, 30, 0.82);
+  --panel-line: rgba(140, 220, 180, 0.22);
+  --ink: #eaf4ef;
+  --muted: #9fb7ad;
+  --accent: #46e08b;        /* launch green, echoes the bottle */
+  --warn: #ffb547;
+  --bad: #ff5d5d;
+  --display: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: #8fc3e6; color: var(--ink); font-family: var(--body); font-size: 14px; overflow: hidden; }
+#world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none;
+  background: linear-gradient(#5aa6dc 0%, #a9d6f0 55%, #dff0f7 100%); }
+.panel { position: absolute; top: 14px; bottom: 14px; width: 300px; background: var(--panel); border: 1px solid var(--panel-line);
+  border-radius: 14px; padding: 16px; overflow-y: auto; backdrop-filter: blur(6px); display: flex; flex-direction: column; gap: 14px; }
+#menu { left: 14px; }
+h1 { font: 700 22px/1.05 var(--display); letter-spacing: 0.04em; margin: 0; text-transform: uppercase; }
+h2 { font: 700 13px var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.seg button { font: 700 15px var(--display); color: var(--ink); background: rgba(255,255,255,0.06); border: 1px solid var(--panel-line);
+  border-radius: 8px; padding: 8px 0; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #062014; border-color: var(--accent); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+label { font-weight: 600; font-size: 13px; }
+.val { font: 700 18px var(--display); font-variant-numeric: tabular-nums; }
+.val input { width: 74px; font: 700 17px var(--display); color: var(--ink); background: rgba(255,255,255,0.07); border: 1px solid var(--panel-line);
+  border-radius: 6px; padding: 2px 6px; text-align: right; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.hint { color: var(--muted); font-size: 11.5px; line-height: 1.35; margin: 0; }
+.note { border: 1px dashed var(--panel-line); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+.note b { color: var(--ink); }
+.chip { display: inline-block; font: 700 12px var(--display); letter-spacing: 0.06em; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; }
+.chip.good { background: rgba(70,224,139,0.18); color: var(--accent); }
+.chip.warn { background: rgba(255,181,71,0.18); color: var(--warn); }
+.chip.bad { background: rgba(255,93,93,0.2); color: var(--bad); }
+.fill { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.fill i { display: block; height: 100%; background: linear-gradient(90deg, #3aa0e8, #6fd0ff); }
+.btn { font: 700 20px var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: #062014; background: var(--accent);
+  border: 0; border-radius: 10px; padding: 12px; cursor: pointer; box-shadow: 0 0 18px rgba(70,224,139,0.45); }
+.btn:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
+.btn2 { font: 600 13px var(--body); color: var(--ink); background: rgba(255,255,255,0.07); border: 1px solid var(--panel-line);
+  border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+.btn:focus-visible, .btn2:focus-visible, .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
+.big { font: 700 44px/1 var(--display); font-variant-numeric: tabular-nums; }
+.big small { font-size: 20px; color: var(--muted); }
+#hud { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+.hudbox { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 6px 14px; text-align: center; min-width: 92px; }
+.hudbox span { display: block; font: 600 11px var(--display); letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+.hudbox b { font: 700 24px var(--display); font-variant-numeric: tabular-nums; }
+#status { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); font: 700 15px var(--display); letter-spacing: 0.3em;
+  text-transform: uppercase; color: #0d2a1c; background: rgba(255,255,255,0.75); padding: 3px 14px; border-radius: 999px; }
+#countdown { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font: 700 120px/1 var(--display); color: #fff;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.45); pointer-events: none; display: none; letter-spacing: 0.04em; }
+#countdown.go { font-size: 76px; color: var(--accent); }
+#result { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--panel); border: 1px solid rgba(70,224,139,0.6);
+  border-radius: 14px; padding: 12px 22px; text-align: center; display: none; box-shadow: 0 0 30px rgba(70,224,139,0.25); }
+#result .big { color: var(--accent); }
+#cams { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; gap: 6px; }
+#cams.up { bottom: 128px; }
+.tag { position: absolute; transform: translate(-50%, -100%); font: 700 13px var(--display); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  pointer-events: none; white-space: nowrap; }
+.tag.flag { font-size: 20px; color: #fff; background: rgba(12,22,30,0.8); padding: 2px 10px; border-radius: 8px; border: 1px solid var(--accent); }
+@media (max-width: 980px) {
+  body { overflow: auto; }
+  #world { position: relative; height: 62vh; }
+  .panel { position: relative; top: auto; bottom: auto; left: auto !important; right: auto !important; width: auto; margin: 12px; }
+  #hud { top: 8px; } #status { top: 62px; }
+  #result { bottom: auto; top: 104px; padding: 8px 14px; } #result .big { font-size: 32px; }
+  #cams, #cams.up { bottom: auto; top: calc(62vh - 46px); }
+}
+@media (prefers-reduced-motion: reduce) { .btn { box-shadow: none; } }
+</style>
+</head>
+<body>
+<canvas id="world" aria-label="3D view of the water rocket flight"></canvas>
+<div id="labels"></div>
+
+<div id="hud" aria-live="off">
+  <div class="hudbox"><span>Height</span><b id="h-alt">0.0 m</b></div>
+  <div class="hudbox"><span>Speed</span><b id="h-spd">0 m/s</b></div>
+  <div class="hudbox"><span>Distance</span><b id="h-dst">0.0 m</b></div>
+  <div class="hudbox"><span>Time</span><b id="h-t">0.0 s</b></div>
+</div>
+<div id="status">Ready</div>
+<div id="countdown" aria-live="assertive"></div>
+
+<aside class="panel" id="menu" aria-label="Launch settings">
+  <div>
+    <h1>Water Rocket<br>Flight Simulator</h1>
+    <p class="sub">Our 2.5 L Sprite rocket: black ogive nose, 4 swept fins. AI-driven flight model.</p>
+  </div>
+  <div class="field">
+    <h2>Bottle size</h2>
+    <div class="seg" id="bottles">
+      <button type="button" data-b="1.5" aria-pressed="false">1.5 L</button>
+      <button type="button" data-b="2.25" aria-pressed="false">2.25 L</button>
+      <button type="button" data-b="2.5" aria-pressed="true">2.5 L</button>
+    </div>
+  </div>
+  <div class="field">
+    <div class="row"><label for="water">Water</label><span class="val"><input id="water-n" type="number" step="10" aria-label="Water in grams"> g</span></div>
+    <input id="water" type="range" step="10">
+    <div class="fill"><i id="water-fill"></i></div>
+    <p class="hint" id="water-hint"></p>
+  </div>
+  <div class="note"><b>CG and CP are measured from the tip of the nose cone.</b> The rocket is stable when the CG is closer to the nose tip than the CP.</div>
+  <div class="field">
+    <div class="row"><label for="cg">Centre of gravity (CG)</label><span class="val"><input id="cg-n" type="number" step="0.5" aria-label="CG in cm from nose tip"> cm</span></div>
+    <input id="cg" type="range" step="0.5">
+  </div>
+  <div class="field">
+    <div class="row"><label for="cp">Centre of pressure (CP)</label><span class="val"><input id="cp-n" type="number" step="0.5" aria-label="CP in cm from nose tip"> cm</span></div>
+    <input id="cp" type="range" step="0.5">
+  </div>
+  <div class="row"><span class="hint">Stability</span><span><span class="chip" id="stab-chip"></span> <span class="hint" id="stab-val"></span></span></div>
+  <div class="field">
+    <div class="row"><label for="mass">Rocket weight (empty)</label><span class="val"><input id="mass-n" type="number" step="5" aria-label="Rocket weight in grams"> g</span></div>
+    <input id="mass" type="range" min="40" max="1200" step="5">
+    <p class="hint" id="mass-hint">Bottle, nose cone, fins and tape, without water.</p>
+  </div>
+  <div class="note">Fixed by the competition launcher: <b>launch pressure 3.0 bar</b> (pop-off launcher, estimated from our 58 m trial) and <b>launch angle 45°</b>.</div>
+  <button class="btn" id="launch" type="button">Launch</button>
+  <button class="btn2" id="reset" type="button">Reset to our rocket</button>
+  <p class="hint">Distances come from our AI-driven flight model (water thrust, air pulse, gravity and drag) and are estimates. Our real trial flew 58 m.</p>
+</aside>
+
+
+<div id="cams">
+  <button class="btn2" type="button" data-cam="chase">Chase cam</button>
+  <button class="btn2" type="button" data-cam="side">Side view</button>
+  <button class="btn2" type="button" data-cam="orbit">Free look</button>
+</div>
+<div id="result" role="status">
+  <div class="hint">Horizontal distance</div>
+  <div class="big" id="res-range">0.0<small> m</small></div>
+  <div class="hint" id="res-sub"></div>
+</div>
+
+<script>
+(function () {
+"use strict";
+// =============================================================================================
+// DATA
+// =============================================================================================
+const BOTTLES = {
+  "1.5":  { V: 1.55e-3, D: 0.0890, L: 0.425, mBottle: 31, name: "1.5 L" },
+  "2.25": { V: 2.33e-3, D: 0.1040, L: 0.450, mBottle: 45, name: "2.25 L" },
+  "2.5":  { V: 2.62e-3, D: 0.1082, L: 0.485, mBottle: 52, name: "2.5 L" },
+};
+// baseMass / baseCg = the rocket as built, with no added weight (our measured 237 g, CG 24.5 cm from the tip)
+const OURS = { bottle: "2.5", water: 850, cg: 24.5, cp: 28.5, mass: 237, baseMass: 237, baseCg: 24.5 };
+const PRESSURE_BAR = 3.0, ANGLE = 45, CD = 0.34, NOZZLE_D = 0.0217;
+const PLAYBACK = 0.65;            // animation speed: 0.65 x real time, constant
+const S = Object.assign({}, OURS);
+
+// =============================================================================================
+// PHYSICS (same model as our Python simulation)
+// =============================================================================================
+function stability(s) {
+  const cal = BOTTLES[s.bottle].D * 100;
+  const m = (s.cp - s.cg) / cal;
+  let verdict, cls;
+  if (m < 0) { verdict = "Unstable"; cls = "bad"; }
+  else if (m < 0.5) { verdict = "Marginal"; cls = "warn"; }
+  else if (m <= 2) { verdict = "Stable"; cls = "good"; }
+  else { verdict = "Over-stable"; cls = "warn"; }
+  return { margin: m, cal, verdict, cls };
+}
+// 2-D rigid-body water rocket flight: position, velocity, body angle and pitch rate.
+// Thrust acts along the body axis; aerodynamic normal force acts at the CP; fins damp rotation.
+function dragCd(margin) {
+  if (margin < 0) return 2.6;            // tumbling broadside
+  if (margin < 0.25) return CD + 0.08;   // strong wobble
+  if (margin < 0.5) return CD + 0.03;    // slight wobble
+  return CD;
+}
+function simulate(bottle, massG, waterG, Cd, record) {
+  const b = BOTTLES[bottle];
+  const g = 9.81, pa = 101325, rw = 1000, gam = 1.4, Rg = 287, T0 = 293;
+  const An = Math.PI * NOZZLE_D * NOZZLE_D / 4, Aref = Math.PI * (b.D / 2) ** 2, V = b.V;
+  const water = waterG / 1000, Va0 = V - water / rw;
+  if (Va0 <= 1e-5) return null;
+  const p0 = pa + PRESSURE_BAR * 1e5;
+  let mw = water, Va = Va0;
+  const mair0 = p0 * Va0 / (Rg * T0), md = massG / 1000;
+  let x = 0, y = 0.3, v = 0, vx = 0, vy = 0, s = 0, t = 0, dt = 2e-4;
+  const th = ANGLE * Math.PI / 180, guide = 0.12;
+  let phase = water > 0 ? "water" : "air";
+  let pAir = 0, TAir = 0, mAir = 0, mAirA = 0, pA0 = 0, TA0 = 0;
+  if (phase === "air") { pAir = p0; TAir = T0; mAir = mAirA = pAir * V / (Rg * TAir); pA0 = pAir; TA0 = TAir; }
+  const traj = []; let nextRec = 0, apex = y, vmax = 0;
+  for (let guard = 0; guard < 2e6; guard++) {
+    let F = 0;
+    if (phase === "water") {
+      const p = p0 * Math.pow(Va0 / Va, gam), dp = p - pa;
+      if (dp <= 0 || mw <= 0) {
+        phase = "air"; pAir = p0 * Math.pow(Va0 / V, gam); TAir = T0 * Math.pow(Va0 / V, gam - 1);
+        mAir = mAirA = pAir * V / (Rg * TAir); pA0 = pAir; TA0 = TAir; continue;
+      }
+      const ve = 0.98 * Math.sqrt(2 * dp / rw), mdot = rw * An * ve;
+      F = mdot * ve; mw = Math.max(mw - mdot * dt, 0); Va += An * ve * dt;
+    } else if (phase === "air") {
+      if (pAir <= pa * 1.0005) phase = "coast";
+      else {
+        let mdot;
+        if (pAir / pa > 1.893) {
+          const pe = pAir * 0.5283, Te = TAir * 0.8333, ve = Math.sqrt(gam * Rg * Te), rhoe = pe / (Rg * Te);
+          mdot = rhoe * An * ve; F = mdot * ve + (pe - pa) * An;
+        } else {
+          const Me = Math.sqrt(2 / (gam - 1) * (Math.pow(pAir / pa, (gam - 1) / gam) - 1));
+          const Te = TAir / (1 + (gam - 1) / 2 * Me * Me), ve = Me * Math.sqrt(gam * Rg * Te), rhoe = pa / (Rg * Te);
+          mdot = rhoe * An * ve; F = mdot * ve;
+        }
+        mAir -= mdot * dt;
+        pAir = pA0 * Math.pow(mAir / mAirA, gam); TAir = TA0 * Math.pow(mAir / mAirA, gam - 1);
+      }
+    }
+    const m = phase === "water" ? md + mw + mair0 : (phase === "air" ? md + mAir : md);
+    const Dg = 0.5 * 1.18 * v * v * Cd * Aref;
+    if (s < guide) {
+      const a = (F - Dg) / m - g * Math.sin(th);
+      v = Math.max(0, v + a * dt); s += v * dt; vx = v * Math.cos(th); vy = v * Math.sin(th);
+    } else {
+      v = Math.hypot(vx, vy); const ux = vx / v, uy = vy / v;
+      vx += ((F - Dg) / m * ux) * dt; vy += ((F - Dg) / m * uy - g) * dt;
+    }
+    x += vx * dt; y += vy * dt; t += dt;
+    const sp = Math.hypot(vx, vy); if (sp > vmax) vmax = sp; if (y > apex) apex = y;
+    if (record && t >= nextRec) { traj.push({ t, x, y, vx, vy, phase, w: water > 0 ? mw / water : 0 }); nextRec += 1 / 120; }
+    if (phase === "coast") dt = 1e-3;
+    if (y < 0 || t > 30) break;
+  }
+  if (record && traj.length) {
+    const last = traj[traj.length - 1];
+    if (last.y > 0 && last.y !== y) { const f = last.y / (last.y - y); x = last.x + (x - last.x) * f; }
+    traj.push({ t, x, y: 0, vx, vy, phase: "coast", w: 0 });
+  }
+  return { range: Math.max(0, x), behind: false, xmin: 0, xmax: Math.max(0, x), time: t, apex, vmax, traj };
+}
+
+function maxWater(bottle) { return Math.floor(BOTTLES[bottle].V * 1e6 * 0.6 / 10) * 10; }
+function minMass(bottle) { return BOTTLES[bottle].mBottle + 40; }   // can't build lighter than bottle + nose + fins
+
+// =============================================================================================
+// UI
+// =============================================================================================
+const $ = id => document.getElementById(id);
+const els = {
+  water: $("water"), waterN: $("water-n"), cg: $("cg"), cgN: $("cg-n"), cp: $("cp"), cpN: $("cp-n"),
+  mass: $("mass"), massN: $("mass-n"),
+};
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+// moving the CG toward the nose = clay in the nose tip (3 cm from the tip);
+// moving it back past the as-built CG = weight at the tail (3 cm from the nozzle)
+function ballast(s) {
+  const Lcm = BOTTLES[s.bottle].L * 100, xNose = 3, xTail = Lcm - 3;
+  if (s.cg < s.baseCg - 1e-6) return { g: s.baseMass * (s.baseCg - s.cg) / (s.cg - xNose), where: "nose" };
+  if (s.cg > s.baseCg + 1e-6) return { g: s.baseMass * (s.cg - s.baseCg) / (xTail - s.cg), where: "tail" };
+  return { g: 0, where: "" };
+}
+function syncInputs() {
+  const b = BOTTLES[S.bottle], Lcm = b.L * 100;
+  els.water.min = 100; els.water.max = maxWater(S.bottle);
+  S.water = clamp(S.water, 100, maxWater(S.bottle));
+  els.cg.min = 6; els.cp.min = 2; els.cg.max = Math.round(Lcm - 6); els.cp.max = Math.round(Lcm - 2);
+  S.cg = clamp(S.cg, 6, Lcm - 6); S.cp = clamp(S.cp, 2, Lcm - 2);
+  S.baseMass = clamp(S.baseMass, 40, 600);
+  const bl = ballast(S);
+  S.mass = S.baseMass + bl.g;
+  els.mass.max = 1200;
+  $("mass-hint").textContent = bl.g < 0.5
+    ? "Bottle, nose cone, fins and tape, without water. Moving the CG adds or removes weight automatically."
+    : `Includes ${Math.round(bl.g)} g of ${bl.where === "nose" ? "clay in the nose tip to move the CG forward" : "weight at the tail to move the CG back"} to ${(+S.cg).toFixed(1)} cm (rocket alone: ${Math.round(S.baseMass)} g, CG ${S.baseCg.toFixed(1)} cm).`;
+  els.water.value = els.waterN.value = Math.round(S.water);
+  els.cg.value = els.cgN.value = (+S.cg).toFixed(1);
+  els.cp.value = els.cpN.value = (+S.cp).toFixed(1);
+  els.mass.value = els.massN.value = Math.round(S.mass);
+  const pct = S.water / (b.V * 1e6) * 100;
+  $("water-fill").style.width = pct.toFixed(0) + "%";
+  $("water-hint").textContent = `${(S.water / 1000).toFixed(2)} L, ${pct.toFixed(0)}% of the ${b.name} bottle`;
+  document.querySelectorAll("#bottles button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.b === S.bottle)));
+  const st = stability(S);
+  const chip = $("stab-chip"); chip.textContent = st.verdict; chip.className = "chip " + st.cls;
+  $("stab-val").textContent = `${st.margin >= 0 ? "+" : ""}${st.margin.toFixed(2)} cal (${Math.abs(S.cp - S.cg).toFixed(1)} cm)`;
+}
+function refresh() {
+  syncInputs();
+  buildRocket();
+  if (state.mode !== "flying") resetFlight();
+}
+function fmt(n, d = 1) { return (+n).toFixed(d); }
+function bindPair(range, num, key) {
+  range.addEventListener("input", () => { S[key] = +range.value; refresh(); });
+  num.addEventListener("change", () => { const v = parseFloat(num.value); if (!isNaN(v)) S[key] = v; refresh(); });
+}
+bindPair(els.water, els.waterN, "water"); bindPair(els.cg, els.cgN, "cg"); bindPair(els.cp, els.cpN, "cp");
+// typing a weight changes the rocket itself; any ballast for the chosen CG stays on top of it
+function setMass(v) { if (isNaN(v)) return; const g = ballast(S).g; S.baseMass = Math.max(40, v - g); refresh(); }
+els.mass.addEventListener("input", () => setMass(+els.mass.value));
+els.massN.addEventListener("change", () => setMass(parseFloat(els.massN.value)));
+// switching bottles: weight of the new bottle + nose cone and fins scaled to it; CG and CP move with the rocket length
+document.querySelectorAll("#bottles button").forEach(btn => btn.onclick = () => {
+  const from = BOTTLES[S.bottle], to = BOTTLES[btn.dataset.b];
+  if (from === to) return;
+  const kL = to.L / from.L, kD = (to.D / from.D) ** 2;
+  S.baseMass = to.mBottle + (S.baseMass - from.mBottle) * kD;
+  S.baseCg *= kL; S.cg *= kL; S.cp *= kL;
+  S.bottle = btn.dataset.b;
+  refresh();
+});
+$("reset").onclick = () => { Object.assign(S, OURS); refresh(); };
+
+// =============================================================================================
+// WEBGL
+// =============================================================================================
+const canvas = $("world");
+const gl = canvas.getContext("webgl", { antialias: true, alpha: true, premultipliedAlpha: false });
+if (!gl) { $("status").textContent = "3D not supported in this browser"; }
+const VS = `attribute vec3 aPos; attribute vec3 aNor; uniform mat4 uVP; uniform mat4 uM;
+varying vec3 vW; varying vec3 vN;
+void main(){ vec4 w = uM * vec4(aPos,1.0); vW = w.xyz; vN = (uM * vec4(aNor, 0.0)).xyz; gl_Position = uVP * w; }`;
+const FS = `precision highp float;
+varying vec3 vW; varying vec3 vN;
+uniform vec3 uCol; uniform vec3 uCam; uniform vec3 uSky; uniform float uAlpha; uniform int uMode; uniform float uSpec;
+void main(){
+  vec3 N = normalize(vN); if (uMode == 1 && !gl_FrontFacing) N = -N;
+  vec3 V = normalize(uCam - vW);
+  vec3 L = normalize(vec3(-0.35, 0.85, 0.4));
+  float dif = max(dot(N, L), 0.0); float hemi = 0.5 + 0.5 * N.y;
+  float spec = pow(max(dot(N, normalize(L + V)), 0.0), 40.0) * uSpec;
+  vec3 col = uCol; float a = uAlpha;
+  if (uMode == 2) {               // ground: mowed stripes + distance lines
+    float stripe = mod(floor(vW.x / 5.0), 2.0);
+    col = mix(vec3(0.30, 0.56, 0.24), vec3(0.35, 0.62, 0.28), stripe);
+    float d10 = abs(fract(vW.x / 10.0 + 0.5) - 0.5) * 10.0;
+    if (vW.x > -0.2 && d10 < 0.045) col = mix(col, vec3(0.95), 0.8);
+    float side = abs(vW.z);
+    if (side > 2.95 && side < 3.05 && vW.x > 0.0) col = mix(col, vec3(0.95), 0.6);
+    col *= 0.75 + 0.35 * dif;
+  } else if (uMode == 3) {        // unlit
+  } else {
+    col = col * (0.38 + 0.42 * hemi + 0.55 * dif) + vec3(spec);
+    if (uMode == 1) { float fr = pow(1.0 - abs(dot(N, V)), 3.0); a = uAlpha + fr * 0.5 + spec * 0.6; col += vec3(fr * 0.25); }
+  }
+  float dist = length(uCam - vW);
+  float fog = 1.0 - exp(-dist * 0.0045);
+  col = mix(col, uSky, clamp(fog, 0.0, 0.85));
+  gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
+}`;
+const PVS = `attribute vec3 aPos; attribute float aSize; uniform mat4 uVP; uniform float uScale;
+void main(){ gl_Position = uVP * vec4(aPos,1.0); gl_PointSize = clamp(aSize * uScale / gl_Position.w, 3.0, 12.0); }`;
+const PFS = `precision mediump float; uniform vec4 uCol;
+void main(){ vec2 c = gl_PointCoord - 0.5; float d = dot(c,c); if (d > 0.25) discard; gl_FragColor = vec4(uCol.rgb, uCol.a * (1.0 - d * 3.0)); }`;
+function compile(vs, fs) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    gl.attachShader(p, sh);
+  }
+  gl.linkProgram(p); return p;
+}
+const prog = compile(VS, FS), pprog = compile(PVS, PFS);
+const U = {}; ["uVP", "uM", "uCol", "uCam", "uSky", "uAlpha", "uMode", "uSpec"].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+const PU = { uVP: gl.getUniformLocation(pprog, "uVP"), uScale: gl.getUniformLocation(pprog, "uScale"), uCol: gl.getUniformLocation(pprog, "uCol") };
+const aPos = gl.getAttribLocation(prog, "aPos"), aNor = gl.getAttribLocation(prog, "aNor");
+const paPos = gl.getAttribLocation(pprog, "aPos"), paSize = gl.getAttribLocation(pprog, "aSize");
+
+function mesh(pos, nor, idx) {
+  const m = { n: idx.length };
+  m.pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, m.pb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.STATIC_DRAW);
+  m.nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, m.nb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(nor), gl.STATIC_DRAW);
+  m.ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+  return m;
+}
+function freeMesh(m) { if (!m) return; gl.deleteBuffer(m.pb); gl.deleteBuffer(m.nb); gl.deleteBuffer(m.ib); }
+// lathe around the local X axis; profile = [[x, r], ...]
+function lathe(profile, segs) {
+  const pos = [], nor = [], idx = [];
+  const n = profile.length;
+  for (let i = 0; i < n; i++) {
+    const [x, r] = profile[i];
+    const a = profile[Math.max(i - 1, 0)], b = profile[Math.min(i + 1, n - 1)];
+    let dx = b[0] - a[0], dr = b[1] - a[1]; const l = Math.hypot(dx, dr) || 1;
+    let nx = -dr / l, nr = dx / l;                      // normal in (x, r)
+    if (dx < 0) { nx = -nx; nr = -nr; }                 // profiles run nose -> tail (x decreasing)
+    for (let j = 0; j <= segs; j++) {
+      const t = j / segs * Math.PI * 2, c = Math.cos(t), s = Math.sin(t);
+      pos.push(x, r * c, r * s); nor.push(nx, nr * c, nr * s);
+    }
+  }
+  for (let i = 0; i < n - 1; i++) for (let j = 0; j < segs; j++) {
+    const a = i * (segs + 1) + j, b = a + segs + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  return mesh(pos, nor, idx);
+}
+function box(sx, sy, sz, ox = 0, oy = 0, oz = 0) {
+  const P = [], N = [], I = [];
+  const f = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  f.forEach((n, k) => {
+    const u = n[0] ? [0, 1, 0] : [1, 0, 0], w = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+    const base = P.length / 3;
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      P.push(ox + (n[0] + u[0] * a + w[0] * b) * sx / 2, oy + (n[1] + u[1] * a + w[1] * b) * sy / 2, oz + (n[2] + u[2] * a + w[2] * b) * sz / 2);
+      N.push(...n);
+    }
+    I.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  });
+  return mesh(P, N, I);
+}
+// thin prism from a planar quad (points in local x/y), thickness along z
+function plate(pts, th) {
+  const P = [], N = [], I = [];
+  const top = pts.map(p => [p[0], p[1], th / 2]), bot = pts.map(p => [p[0], p[1], -th / 2]);
+  const add = (q, n) => { const b = P.length / 3; q.forEach(v => { P.push(...v); N.push(...n); }); I.push(b, b + 1, b + 2, b, b + 2, b + 3); };
+  add(top, [0, 0, 1]); add([...bot].reverse(), [0, 0, -1]);
+  for (let i = 0; i < 4; i++) {
+    const a = pts[i], b = pts[(i + 1) % 4], ex = b[0] - a[0], ey = b[1] - a[1], l = Math.hypot(ex, ey);
+    add([[a[0], a[1], -th / 2], [b[0], b[1], -th / 2], [b[0], b[1], th / 2], [a[0], a[1], th / 2]], [ey / l, -ex / l, 0]);
+  }
+  return mesh(P, N, I);
+}
+function disk(r, segs) {
+  const P = [0, 0, 0], N = [0, 1, 0], I = [];
+  for (let j = 0; j <= segs; j++) { const t = j / segs * Math.PI * 2; P.push(r * Math.cos(t), 0, r * Math.sin(t)); N.push(0, 1, 0); }
+  for (let j = 1; j <= segs; j++) I.push(0, j + 1, j);
+  return mesh(P, N, I);
+}
+
+// --- static scene
+const ground = (() => { const P = [], N = [], I = []; const xs = [-60, 260], zs = [-90, 90];
+  P.push(xs[0], 0, zs[0], xs[1], 0, zs[0], xs[1], 0, zs[1], xs[0], 0, zs[1]); N.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0); I.push(0, 2, 1, 0, 3, 2);
+  return mesh(P, N, I); })();
+const padBase = box(0.6, 0.12, 0.6, 0, 0.06, 0);
+const padRod = box(0.5, 0.025, 0.025, 0.25, 0, 0);     // rotated to 45 deg at draw time
+const post = box(0.06, 0.8, 0.06, 0, 0.4, 0);
+const flagPole = box(0.05, 1.6, 0.05, 0, 0.8, 0);
+const flagCloth = plate([[0, 1.6], [0.7, 1.46], [0.7, 1.34], [0, 1.2]], 0.01);
+const shadow = disk(0.5, 24);
+
+// --- rocket meshes (rebuilt when the bottle changes); local frame: +X = nose, origin at the CG
+let R = null;
+function buildRocket() {
+  const b = BOTTLES[S.bottle], L = b.L, k = L / 0.485, Rb = b.D / 2, Rn = Rb + 0.0017;
+  if (R && R.key === S.bottle + "|" + S.cg) return;
+  if (R) ["nose", "bottle", "ring", "fin", "water"].forEach(n => freeMesh(R[n]));
+  const cgS = S.cg / 100;                         // distance of CG from the tip (m)
+  const X = s => cgS - s;                         // s measured from the tip -> local x
+  const Ln = 0.171 * k, rho = (Rn * Rn + Ln * Ln) / (2 * Rn);
+  const nose = [];
+  for (let i = 0; i <= 18; i++) { const s = Ln * (i / 18) ** 1.4; const r = i === 0 ? 0 : Math.sqrt(rho * rho - (Ln - s) ** 2) + Rn - rho; nose.push([X(s), Math.max(r, 0.0005)]); }
+  nose[0][1] = 0.0001;
+  nose.push([X(Ln + 0.02 * k), Rn], [X(Ln + 0.02 * k + 0.0005), Rb]);
+  const sSh = L - 0.083 * k, sNeck = L - 0.022 * k, rNeck = 0.0145;
+  const bottle = [[X(Ln - 0.01), Rb], [X(sSh), Rb]];
+  for (let i = 1; i <= 10; i++) { const u = i / 10; bottle.push([X(sSh + u * (sNeck - sSh)), rNeck + (Rb - rNeck) * Math.cos(u * Math.PI / 2) ** 0.8]); }
+  bottle.push([X(sNeck + 0.003), 0.0165], [X(sNeck + 0.006), 0.0165], [X(sNeck + 0.007), rNeck], [X(L), rNeck]);
+  const sRLE = L - 0.137 * k, Cr = 0.05 * k, Ct = 0.04 * k, sp = 0.09 * k, XR = 0.09 * k;
+  const ring = [[X(sRLE - 0.003), Rb + 0.0009], [X(sRLE + Cr + 0.003), Rb + 0.0009]];
+  const fin = plate([[X(sRLE), Rb], [X(sRLE + Cr), Rb], [X(sRLE + XR + Ct), Rb + sp], [X(sRLE + XR), Rb + sp]], 0.0025 * k);
+  // water: a unit-length cylinder starting at the shoulder, extending toward the nose (scaled at draw time)
+  const water = lathe([[0, 0.0001], [0, Rb * 0.95], [1, Rb * 0.95], [1, 0.0001]], 28);
+  R = { key: S.bottle + "|" + S.cg, nose: lathe(nose, 36), bottle: lathe(bottle, 36), ring: lathe(ring, 36), fin, water,
+        L, Rb, cgS, xShoulder: X(sSh), area: Math.PI * (Rb * 0.95) ** 2, xNozzle: X(L) };
+}
+
+// =============================================================================================
+// MATH
+// =============================================================================================
+function persp(fov, asp, n, f) { const t = 1 / Math.tan(fov / 2), nf = 1 / (n - f); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) * nf, -1, 0, 0, 2 * f * n * nf, 0]; }
+function lookAt(e, c, u) {
+  let z = [e[0] - c[0], e[1] - c[1], e[2] - c[2]]; let l = Math.hypot(...z); z = z.map(v => v / l);
+  let x = [u[1] * z[2] - u[2] * z[1], u[2] * z[0] - u[0] * z[2], u[0] * z[1] - u[1] * z[0]]; l = Math.hypot(...x); x = x.map(v => v / l);
+  const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
+  return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -(x[0] * e[0] + x[1] * e[1] + x[2] * e[2]), -(y[0] * e[0] + y[1] * e[1] + y[2] * e[2]), -(z[0] * e[0] + z[1] * e[1] + z[2] * e[2]), 1];
+}
+function mul(a, b) { const r = new Array(16).fill(0); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let q = 0; q < 4; q++) r[j * 4 + i] += a[q * 4 + i] * b[j * 4 + q]; return r; }
+function T(x, y, z) { return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]; }
+function RZ(a) { const c = Math.cos(a), s = Math.sin(a); return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; }
+function RX(a) { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]; }
+function RY(a) { const c = Math.cos(a), s = Math.sin(a); return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]; }
+function SC(x, y, z) { return [x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1]; }
+const I4 = T(0, 0, 0);
+
+// =============================================================================================
+// FLIGHT STATE + CAMERA
+// =============================================================================================
+const state = { mode: "ready", t: 0, sim: null, idx: 0, trail: [], spray: [], cam: "chase", landed: null,
+  camPos: [-2.5, 1.6, 3.2], camTgt: [0, 0.6, 0], orbit: { az: -0.9, el: 0.25, dist: 3.2 } };
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function launchPose() {          // rocket resting on the 45 deg launcher: nozzle at the rod top
+  const th = ANGLE * Math.PI / 180;
+  const d = -R.xNozzle;          // CG is this far ahead of the nozzle along the axis
+  return { x: 0.35 + d * Math.cos(th), y: 0.3 + d * Math.sin(th), ang: th };
+}
+function resetFlight() {
+  state.mode = "ready"; state.t = 0; state.idx = 0; state.trail = []; state.spray = []; state.landed = null; state.sim = null;
+  $("status").textContent = "Ready"; $("result").style.display = "none"; $("cams").classList.remove("up");
+  $("launch").disabled = false; hud(0, 0, 0, 0); placeFlagLabel(null);
+  $("countdown").style.display = "none";
+}
+function launch() {
+  const st = stability(S);
+  const r = simulate(S.bottle, S.mass, S.water, dragCd(st.margin), true);
+  if (!r) { $("status").textContent = "Too much water"; return; }
+  state.sim = r; state.st = st; state.mode = "countdown"; state.cd = 3.4; state.t = 0; state.idx = 0;
+  state.trail = []; state.spray = []; state.landed = null;
+  placeFlagLabel(null); hud(0, 0, 0, 0);
+  $("launch").disabled = true; $("result").style.display = "none"; $("cams").classList.remove("up");
+  if (state.cam === "orbit") state.cam = "chase";
+}
+$("launch").onclick = launch;
+document.querySelectorAll("#cams button").forEach(b => b.onclick = () => { state.cam = b.dataset.cam; });
+function hud(alt, spd, dst, t) {
+  $("h-alt").textContent = fmt(alt) + " m"; $("h-spd").textContent = fmt(spd, 0) + " m/s";
+  $("h-dst").textContent = fmt(dst) + " m"; $("h-t").textContent = fmt(t) + " s";
+}
+// free-look orbit (drag / wheel)
+let drag = null;
+canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY]; canvas.setPointerCapture(e.pointerId); if (state.mode !== "flying") state.cam = "orbit"; });
+canvas.addEventListener("pointermove", e => { if (!drag) return; const o = state.orbit;
+  o.az -= (e.clientX - drag[0]) * 0.006; o.el = clamp(o.el + (e.clientY - drag[1]) * 0.006, 0.02, 1.4); drag = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointerup", () => drag = null);
+canvas.addEventListener("wheel", e => { e.preventDefault(); state.orbit.dist = clamp(state.orbit.dist * Math.exp(e.deltaY * 0.0012), 1.2, 160); state.cam = "orbit"; }, { passive: false });
+
+// labels (distance signs + landing flag)
+const labelsEl = $("labels"), signs = [];
+for (let d = 10; d <= 150; d += 10) { const e = document.createElement("div"); e.className = "tag"; e.textContent = d + " m"; labelsEl.appendChild(e); signs.push({ d, e }); }
+const flagLabel = document.createElement("div"); flagLabel.className = "tag flag"; flagLabel.style.display = "none"; labelsEl.appendChild(flagLabel);
+function placeFlagLabel(x) { state.flagX = x; flagLabel.style.display = x === null ? "none" : "block"; if (x !== null) flagLabel.textContent = x < 0 ? fmt(-x) + " m behind" : fmt(x) + " m"; }
+
+// =============================================================================================
+// RENDER LOOP
+// =============================================================================================
+const SKY = [0.78, 0.89, 0.95];
+let last = performance.now();
+function frame(now) {
+  try { drawFrame(now); } catch (err) { console.error(err); resetFlight(); }
+  requestAnimationFrame(frame);
+}
+function drawFrame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  if (!R) buildRocket();
+
+  // ---- rocket pose
+  let pos, ang, pathAng, waterFrac = 1, phase = "ready", sp = 0;
+  const pose0 = launchPose();
+  if (state.mode === "ready" || state.mode === "countdown") {
+    pos = [pose0.x, pose0.y, 0]; ang = pose0.ang;
+    if (state.mode === "countdown") {
+      state.cd -= dt;
+      const cdEl = $("countdown");
+      cdEl.style.display = "block";
+      if (state.cd > 0.4) { cdEl.className = ""; cdEl.textContent = Math.ceil(state.cd - 0.4); $("status").textContent = "Countdown"; }
+      else { cdEl.className = "go"; cdEl.textContent = "LIFT-OFF!"; }
+      if (state.cd <= 0) { state.mode = "flying"; state.t = 0; state.goT = 0.7; }
+    }
+  } else {
+    if (state.mode === "flying") {
+      state.t += dt * PLAYBACK;                                    // one steady playback speed for the whole flight
+      if (state.goT !== undefined) { state.goT -= dt; if (state.goT <= 0) { $("countdown").style.display = "none"; state.goT = undefined; } }
+    }
+    const tr = state.sim.traj;
+    let i = Math.min(state.idx || 0, tr.length - 1); if (state.mode === "flying") { while (i < tr.length - 1 && tr[i + 1].t <= state.t) i++; } state.idx = i;
+    const A = tr[i], B = tr[Math.min(i + 1, tr.length - 1)];
+    const f = state.mode === "flying" && B.t > A.t ? clamp((state.t - A.t) / (B.t - A.t), 0, 1) : (state.mode === "flying" ? 0 : 1);
+    const lerp = (a, b) => a + (b - a) * f;
+    const p = state.mode === "flying"
+      ? { t: lerp(A.t, B.t), x: lerp(A.x, B.x), y: lerp(A.y, B.y), vx: lerp(A.vx, B.vx), vy: lerp(A.vy, B.vy), w: lerp(A.w, B.w), phase: A.phase }
+      : tr[tr.length - 1];
+    const sx = pose0.x - 0.0, sy = pose0.y - 0.3;                 // offset launcher geometry to the sim origin
+    pos = [p.x + sx, Math.max(p.y + sy, 0.08), 0];
+    pathAng = (Math.abs(p.vx) + Math.abs(p.vy) > 0.01) ? Math.atan2(p.vy, p.vx) : pose0.ang;   // direction of travel (camera)
+    ang = pathAng;
+    const m = state.st.margin;
+    if (m < 0 && state.t > 0.15) ang += (state.t - 0.15) * Math.PI * 4;              // unstable: tumbles
+    else if (m < 0.25) ang += 0.07 * Math.exp(-state.t / 0.5) * Math.sin(state.t * 14); // very low margin: small, fading wobble
+    // 0.25 cal and above (our rocket: 0.37) flies straight, as in our 58 m trial
+    state.tumbling = m < 0 && state.t > 0.15;
+    waterFrac = p.w; phase = p.phase; sp = Math.hypot(p.vx, p.vy);
+    if (state.mode === "flying") {
+      const lt = state.trail[state.trail.length - 1];
+      if (!lt || Math.hypot(pos[0] - lt[0], pos[1] - lt[1]) > 0.35) state.trail.push([pos[0], pos[1], 0]);
+      hud(Math.max(p.y, 0), sp, p.x, p.t);
+      $("status").textContent = phase === "water" ? "Water thrust" : phase === "air" ? "Air pulse" : (state.tumbling ? "Tumbling!" : "Coasting");
+      if (i >= tr.length - 1) {                                    // landed
+        state.mode = "landed"; state.landed = [pos[0], 0, 0];
+        $("status").textContent = "Landed"; $("launch").disabled = false;
+        $("res-range").innerHTML = state.sim.behind ? `${fmt(-state.sim.range)}<small> m behind the launcher</small>` : `${fmt(state.sim.range)}<small> m</small>`;
+        $("res-sub").textContent = `Max height ${fmt(state.sim.apex)} m · flight time ${fmt(state.sim.time)} s · top speed ${fmt(state.sim.vmax, 0)} m/s · ${state.st.verdict.toLowerCase()} (${state.st.margin >= 0 ? "+" : ""}${state.st.margin.toFixed(2)} cal)`;
+        $("result").style.display = "block"; $("cams").classList.add("up");
+        placeFlagLabel(state.sim.range);
+        setTimeout(() => { if (state.mode === "landed" && state.cam === "chase") state.cam = "side"; }, 900);
+      }
+    }
+  }
+  if (pathAng === undefined) pathAng = ang;
+  const dir = [Math.cos(ang), Math.sin(ang), 0];                 // where the rocket body points
+  const pdir = [Math.cos(pathAng), Math.sin(pathAng), 0];        // where it is travelling
+  const nozzleW = [pos[0] + dir[0] * R.xNozzle, pos[1] + dir[1] * R.xNozzle, 0];
+  // ---- spray particles
+  if (state.mode === "flying" && phase === "water") {
+    for (let n = 0; n < 14; n++) {
+      const spread = (Math.random() - 0.5) * 0.35, spd = 6 + Math.random() * 10, a = ang + Math.PI + spread;
+      state.spray.push({ p: [...nozzleW], v: [Math.cos(a) * spd, Math.sin(a) * spd, (Math.random() - 0.5) * 2], life: 0.7 });
+    }
+  }
+  state.spray.forEach(s => { s.v[1] -= 9.81 * dt; for (let q = 0; q < 3; q++) s.p[q] += s.v[q] * dt; s.life -= dt; if (s.p[1] < 0.02) { s.p[1] = 0.02; s.v[1] *= -0.2; s.v[0] *= 0.5; } });
+  state.spray = state.spray.filter(s => s.life > 0);
+
+  // ---- camera
+  let eye, tgt;
+  const range = state.sim ? Math.max(state.sim.xmax - Math.min(state.sim.xmin, 0), 5) : 30, apex = state.sim ? state.sim.apex : 10;
+  const xLeft = state.sim ? Math.min(state.sim.xmin, 0) : 0;
+  if (state.cam === "chase" && state.mode !== "ready") {   // includes the countdown: camera settles behind the rocket
+    eye = [pos[0] - pdir[0] * 2.6 - 0.6, pos[1] - pdir[1] * 2.6 + 0.9, 2.4]; tgt = [pos[0] + pdir[0] * 0.3, pos[1] + pdir[1] * 0.3, 0];
+  } else if (state.cam === "side") {
+    const mid = xLeft + Math.max(range, 20) * 0.5 + 2;
+    eye = [mid, Math.max(apex, 8) * 0.6 + 4, Math.max(range, 25) * 1.45 + 12]; tgt = [mid, Math.max(apex, 8) * 0.4, 0];
+  } else {
+    const o = state.orbit, c = state.mode === "ready" ? [pos[0], pos[1], 0] : (state.landed || pos);
+    if (state.mode === "ready" && !drag && state.cam !== "orbit" && !reduceMotion) o.az += dt * 0.25;
+    eye = [c[0] + o.dist * Math.cos(o.el) * Math.sin(o.az), c[1] + o.dist * Math.sin(o.el), c[2] + o.dist * Math.cos(o.el) * Math.cos(o.az)]; tgt = c;
+  }
+  const locked = state.mode === "flying" && state.cam === "chase";
+  const kk = locked ? 1 - Math.pow(1e-6, dt) : (state.mode === "countdown" ? 1 - Math.pow(0.08, dt) : 1 - Math.pow(0.02, dt));
+  for (let q = 0; q < 3; q++) { state.camPos[q] += (eye[q] - state.camPos[q]) * kk; state.camTgt[q] += (tgt[q] - state.camTgt[q]) * kk; }
+  if (state.camPos[1] < 0.15) state.camPos[1] = 0.15;
+  const VP = mul(persp(0.95, w / Math.max(h, 1), 0.05, 1500), lookAt(state.camPos, state.camTgt, [0, 1, 0]));
+
+  // ---- draw
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.BLEND); gl.depthMask(true);
+  gl.useProgram(prog);
+  gl.uniformMatrix4fv(U.uVP, false, VP); gl.uniform3fv(U.uCam, state.camPos); gl.uniform3fv(U.uSky, SKY);
+  const draw = (m, M, col, mode = 0, alpha = 1, spec = 0.3) => {
+    gl.uniformMatrix4fv(U.uM, false, M); gl.uniform3fv(U.uCol, col); gl.uniform1i(U.uMode, mode); gl.uniform1f(U.uAlpha, alpha); gl.uniform1f(U.uSpec, spec);
+    gl.bindBuffer(gl.ARRAY_BUFFER, m.pb); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, m.nb); gl.enableVertexAttribArray(aNor); gl.vertexAttribPointer(aNor, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.ib); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_SHORT, 0);
+  };
+  draw(ground, I4, [0.3, 0.55, 0.25], 2, 1, 0);
+  draw(padBase, T(0.35, 0, 0), [0.25, 0.27, 0.3], 0, 1, 0.2);
+  draw(padRod, mul(T(0.35, 0.12, 0), RZ(ANGLE * Math.PI / 180)), [0.55, 0.57, 0.6], 0, 1, 0.5);
+  for (const s of signs) draw(post, T(s.d, 0, -3.2), [0.95, 0.95, 0.95], 0, 1, 0.1);
+  if (state.flagX !== null && state.flagX !== undefined) {
+    const fx = state.flagX + pose0.x;
+    draw(flagPole, T(fx, 0, 0.4), [0.9, 0.9, 0.9], 0, 1, 0.2);
+    draw(flagCloth, T(fx, 0, 0.4), [1.0, 0.33, 0.25], 0, 1, 0.1);
+  }
+  // rocket
+  const MR = mul(T(pos[0], pos[1], pos[2]), RZ(ang));   // straight fins: no roll
+  const black = [0.05, 0.05, 0.06];
+  draw(R.nose, MR, black, 0, 1, 0.55);
+  draw(R.ring, MR, black, 0, 1, 0.4);
+  for (let f = 0; f < 4; f++) draw(R.fin, mul(MR, RX(Math.PI / 4 + f * Math.PI / 2)), black, 0, 1, 0.4);
+  // transparent layer
+  gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+  const shH = Math.max(pos[1], 0), shA = clamp(0.35 - shH * 0.015, 0.05, 0.35), shS = 0.6 + shH * 0.05;
+  draw(shadow, mul(T(pos[0], 0.01, 0), SC(shS, 1, shS * 0.6)), [0, 0, 0], 3, shA, 0);
+  // water inside the bottle (sits at the nozzle end)
+  const waterLen = (state.mode === "ready" ? S.water / 1000 / 1000 : waterFrac * S.water / 1e6) / R.area;
+  if (waterLen > 0.002) {
+    const wl = Math.min(waterLen, Math.abs(R.xShoulder - (R.cgS - 0.171 * R.L / 0.485 - 0.01)) + 0.0);
+    draw(R.water, mul(MR, mul(T(R.xShoulder - 0.0, 0, 0), SC(wl, 1, 1))), [0.25, 0.6, 0.95], 0, 0.45, 0.4);
+  }
+  // bottle glass: back faces then front faces
+  gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+  draw(R.bottle, MR, [0.55, 0.86, 0.63], 1, 0.3, 0.9);
+  gl.disable(gl.CULL_FACE);
+  // points: trail + spray
+  gl.useProgram(pprog); gl.uniformMatrix4fv(PU.uVP, false, VP); gl.uniform1f(PU.uScale, canvas.height * 0.9);
+  const pts = (arr, size, col) => {
+    if (!arr.length) return;
+    const P = new Float32Array(arr.length * 3), Sz = new Float32Array(arr.length);
+    arr.forEach((p, q) => { P[q * 3] = p[0]; P[q * 3 + 1] = p[1]; P[q * 3 + 2] = p[2]; Sz[q] = size; });
+    const b1 = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b1); gl.bufferData(gl.ARRAY_BUFFER, P, gl.STREAM_DRAW);
+    gl.enableVertexAttribArray(paPos); gl.vertexAttribPointer(paPos, 3, gl.FLOAT, false, 0, 0);
+    const b2 = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b2); gl.bufferData(gl.ARRAY_BUFFER, Sz, gl.STREAM_DRAW);
+    gl.enableVertexAttribArray(paSize); gl.vertexAttribPointer(paSize, 1, gl.FLOAT, false, 0, 0);
+    gl.uniform4fv(PU.uCol, col); gl.drawArrays(gl.POINTS, 0, arr.length);
+    gl.deleteBuffer(b1); gl.deleteBuffer(b2);
+    gl.disableVertexAttribArray(paSize);
+  };
+  const trailPts = state.mode === "landed" ? state.sim.traj.filter((p, q) => q % 6 === 0).map(p => [p.x + pose0.x, Math.max(p.y + pose0.y - 0.3, 0.05), 0])
+    : state.trail.filter(q => Math.hypot(q[0] - pos[0], q[1] - pos[1]) > R.L * 1.2);
+  pts(trailPts, 0.05, [1.0, 0.85, 0.2, 0.95]);
+  pts(state.spray.map(s => s.p), 0.04, [0.55, 0.8, 1.0, 0.85]);
+  gl.depthMask(true); gl.disable(gl.BLEND);
+
+  // ---- HTML labels
+  const proj = p => { const x = VP[0] * p[0] + VP[4] * p[1] + VP[8] * p[2] + VP[12], y = VP[1] * p[0] + VP[5] * p[1] + VP[9] * p[2] + VP[13],
+    ww = VP[3] * p[0] + VP[7] * p[1] + VP[11] * p[2] + VP[15]; return ww <= 0 ? null : [(x / ww * 0.5 + 0.5) * w, (-y / ww * 0.5 + 0.5) * h, ww]; };
+  const rect = canvas.getBoundingClientRect();
+  for (const s of signs) { const q = proj([s.d, 0.95, -3.2]);
+    if (!q || q[2] > 220) { s.e.style.display = "none"; continue; }
+    s.e.style.display = "block"; s.e.style.left = (rect.left + q[0]) + "px"; s.e.style.top = (rect.top + window.scrollY + q[1]) + "px"; }
+  if (state.flagX !== null && state.flagX !== undefined) { const q = proj([state.flagX + pose0.x, 1.9, 0.4]);
+    if (q) { flagLabel.style.display = "block"; flagLabel.style.left = (rect.left + q[0]) + "px"; flagLabel.style.top = (rect.top + window.scrollY + q[1]) + "px"; } else flagLabel.style.display = "none"; }
+}
+
+// =============================================================================================
+// START
+// =============================================================================================
+refresh();
+requestAnimationFrame(frame);
+window.__sim = { simulate, stability, dragCd, S };
+})();
+</script>
+</body>
+</html>
